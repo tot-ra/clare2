@@ -29,6 +29,7 @@ export const providerNames = [
 	"human-relay",
 	"fake-ai",
 	"xai",
+	"clarifai",
 ] as const
 
 export const providerNamesSchema = z.enum(providerNames)
@@ -404,6 +405,11 @@ export const providerSettingsSchema = z.object({
 	rateLimitSeconds: z.number().optional(),
 	// Fake AI
 	fakeAi: z.unknown().optional(),
+	// Clarifai
+	clarifaiPat: z.string().optional(),
+	clarifaiApiKey: z.string().optional(), // Keeping this for potential future use or if PAT isn't the only auth method
+	clarifaiApiBaseUrl: z.string().optional(),
+	clarifaiModelVersionId: z.string().optional(),
 })
 
 export type ProviderSettings = z.infer<typeof providerSettingsSchema>
@@ -494,6 +500,11 @@ const providerSettingsRecord: ProviderSettingsRecord = {
 	fakeAi: undefined,
 	// X.AI (Grok)
 	xaiApiKey: undefined,
+	// Clarifai
+	clarifaiPat: undefined,
+	clarifaiApiKey: undefined,
+	clarifaiApiBaseUrl: undefined,
+	clarifaiModelVersionId: undefined,
 }
 
 export const PROVIDER_SETTINGS_KEYS = Object.keys(providerSettingsRecord) as Keys<ProviderSettings>[]

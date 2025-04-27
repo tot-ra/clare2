@@ -3,6 +3,7 @@ import {
 	ModelInfo,
 	anthropicModels,
 	bedrockModels,
+	clarifaiModels,
 	deepSeekModels,
 	geminiModels,
 	mistralModels,
@@ -16,6 +17,7 @@ export { REASONING_MODELS, PROMPT_CACHING_MODELS } from "@roo/shared/api"
 export const MODELS_BY_PROVIDER: Partial<Record<ApiProvider, Record<string, ModelInfo>>> = {
 	anthropic: anthropicModels,
 	bedrock: bedrockModels,
+	clarifai: clarifaiModels,
 	deepseek: deepSeekModels,
 	gemini: geminiModels,
 	mistral: mistralModels,
@@ -25,9 +27,10 @@ export const MODELS_BY_PROVIDER: Partial<Record<ApiProvider, Record<string, Mode
 }
 
 export const PROVIDERS = [
-	{ value: "openrouter", label: "OpenRouter" },
-	{ value: "anthropic", label: "Anthropic" },
-	{ value: "gemini", label: "Google Gemini" },
+    { value: "openrouter", label: "OpenRouter" },
+    { value: "anthropic", label: "Anthropic" },
+    { value: "clarifai", label: "Clarifai" },
+    { value: "gemini", label: "Google Gemini" },
 	{ value: "deepseek", label: "DeepSeek" },
 	{ value: "openai-native", label: "OpenAI" },
 	{ value: "openai", label: "OpenAI Compatible" },

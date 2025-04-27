@@ -1,12 +1,36 @@
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useAppTranslation } from "@/i18n/TranslationContext"
 import { Trans } from "react-i18next"
-import { getRequestyAuthUrl, getOpenRouterAuthUrl, getGlamaAuthUrl } from "@src/oauth/urls"
 import { useDebounce, useEvent } from "react-use"
 import { LanguageModelChatSelector } from "vscode"
 import { Checkbox } from "vscrui"
-import { VSCodeLink, VSCodeRadio, VSCodeRadioGroup, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeLink, VSCodeRadio, VSCodeRadioGroup, VSCodeTextField, VSCodeBadge } from "@vscode/webview-ui-toolkit/react"
 import { ExternalLinkIcon } from "@radix-ui/react-icons"
+
+import { getRequestyAuthUrl, getOpenRouterAuthUrl, getGlamaAuthUrl } from "@src/oauth/urls"
+import { vscode } from "@src/utils/vscode"
+import { validateApiConfiguration, validateModelId, validateBedrockArn } from "@src/utils/validate"
+import { useRouterModels } from "@/components/ui/hooks/useRouterModels"
+import { useSelectedModel } from "@/components/ui/hooks/useSelectedModel"
+import {
+	useOpenRouterModelProviders,
+	OPENROUTER_DEFAULT_PROVIDER_NAME,
+} from "@src/components/ui/hooks/useOpenRouterModelProviders"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Button } from "@src/components/ui"
+import { VSCodeButtonLink } from "../common/VSCodeButtonLink"
+import { MODELS_BY_PROVIDER, PROVIDERS, VERTEX_REGIONS, REASONING_MODELS } from "./constants"
+import { ModelInfoView } from "./ModelInfoView"
+import { ModelPicker } from "./ModelPicker"
+import { ApiErrorMessage } from "./ApiErrorMessage"
+import { ThinkingBudget } from "./ThinkingBudget"
+import { R1FormatSetting } from "./R1FormatSetting"
+import { OpenRouterBalanceDisplay } from "./OpenRouterBalanceDisplay"
+import { RequestyBalanceDisplay } from "./RequestyBalanceDisplay"
+import { ReasoningEffort } from "./ReasoningEffort"
+import { PromptCachingControl } from "./PromptCachingControl"
+import { DiffSettingsControl } from "./DiffSettingsControl"
+import { TemperatureControl } from "./TemperatureControl"
+import { RateLimitSecondsControl } from "./RateLimitSecondsControl"
 
 import {
 	ApiConfiguration,
@@ -23,31 +47,11 @@ import {
 import { ExtensionMessage } from "@roo/shared/ExtensionMessage"
 import { AWS_REGIONS } from "@roo/shared/aws_regions"
 
-import { vscode } from "@src/utils/vscode"
-import { validateApiConfiguration, validateModelId, validateBedrockArn } from "@src/utils/validate"
-import { useRouterModels } from "@/components/ui/hooks/useRouterModels"
-import { useSelectedModel } from "@/components/ui/hooks/useSelectedModel"
-import {
-	useOpenRouterModelProviders,
-	OPENROUTER_DEFAULT_PROVIDER_NAME,
-} from "@src/components/ui/hooks/useOpenRouterModelProviders"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Button } from "@src/components/ui"
+const clarifaiDefaultModelId = "YOUR_DEFAULT_CLARIFAI_MODEL_ID"; // Placeholder, replace with actual default
 
-import { VSCodeButtonLink } from "../common/VSCodeButtonLink"
-
-import { MODELS_BY_PROVIDER, PROVIDERS, VERTEX_REGIONS, REASONING_MODELS } from "./constants"
-import { ModelInfoView } from "./ModelInfoView"
-import { ModelPicker } from "./ModelPicker"
-import { ApiErrorMessage } from "./ApiErrorMessage"
-import { ThinkingBudget } from "./ThinkingBudget"
-import { R1FormatSetting } from "./R1FormatSetting"
-import { OpenRouterBalanceDisplay } from "./OpenRouterBalanceDisplay"
-import { RequestyBalanceDisplay } from "./RequestyBalanceDisplay"
-import { ReasoningEffort } from "./ReasoningEffort"
-import { PromptCachingControl } from "./PromptCachingControl"
-import { DiffSettingsControl } from "./DiffSettingsControl"
-import { TemperatureControl } from "./TemperatureControl"
-import { RateLimitSecondsControl } from "./RateLimitSecondsControl"
+// Add clarifai to PROVIDERS and MODELS_BY_PROVIDER
+PROVIDERS.push({ value: "clarifai", label: "Clarifai" });
+MODELS_BY_PROVIDER.clarifai = {}; // Initialize with an empty object, models will be fetched
 
 export interface ApiOptionsProps {
 	uriScheme: string | undefined
@@ -71,8 +75,14 @@ const ApiOptions = ({
 	const [ollamaModels, setOllamaModels] = useState<string[]>([])
 	const [lmStudioModels, setLmStudioModels] = useState<string[]>([])
 	const [vsCodeLmModels, setVsCodeLmModels] = useState<LanguageModelChatSelector[]>([])
+	const [clarifaiModels, setClarifaiModels] = useState<Record<string, ModelInfo> | null>(null); // Added clarifai models state
 
 	const [openAiModels, setOpenAiModels] = useState<Record<string, ModelInfo> | null>(null)
+
+	const [clarifaiTestResult, setClarifaiTestResult] = useState<boolean | null>(null); // Added clarifai test result state
+	const [clarifaiSaveResult, setClarifaiSaveResult] = useState<boolean | null>(null); // Added clarifai save result state
+	const [isTestingClarifai, setIsTestingClarifai] = useState(false); // Added clarifai testing state
+	const [isSavingClarifai, setIsSavingClarifai] = useState(false); // Added clarifai saving state
 
 	const [anthropicBaseUrlSelected, setAnthropicBaseUrlSelected] = useState(!!apiConfiguration?.anthropicBaseUrl)
 	const [azureApiVersionSelected, setAzureApiVersionSelected] = useState(!!apiConfiguration?.azureApiVersion)
@@ -132,6 +142,14 @@ const ApiOptions = ({
 				vscode.postMessage({ type: "requestLmStudioModels", text: apiConfiguration?.lmStudioBaseUrl })
 			} else if (selectedProvider === "vscode-lm") {
 				vscode.postMessage({ type: "requestVsCodeLmModels" })
+			} else if (selectedProvider === "clarifai") { // Added clarifai case
+				vscode.postMessage({
+					type: "requestClarifaiModels",
+					values: {
+						pat: apiConfiguration?.clarifaiPat,
+						baseUrl: apiConfiguration?.clarifaiApiBaseUrl,
+					},
+				});
 			}
 		},
 		250,
@@ -142,6 +160,8 @@ const ApiOptions = ({
 			apiConfiguration?.openAiApiKey,
 			apiConfiguration?.ollamaBaseUrl,
 			apiConfiguration?.lmStudioBaseUrl,
+			apiConfiguration?.clarifaiPat, // Added clarifaiPat to dependencies
+			apiConfiguration?.clarifaiApiBaseUrl, // Added clarifaiApiBaseUrl to dependencies
 		],
 	)
 
@@ -187,6 +207,12 @@ const ApiOptions = ({
 					setVsCodeLmModels(newModels)
 				}
 				break
+			case "clarifaiModels": // Added clarifai models case
+				{
+					const newModels = message.clarifaiModels ?? {};
+					setClarifaiModels(newModels);
+				}
+				break;
 		}
 	}, [])
 
@@ -265,6 +291,11 @@ const ApiOptions = ({
 						setApiConfigurationField("requestyModelId", requestyDefaultModelId)
 					}
 					break
+				case "clarifai": // Added clarifai case
+					if (!apiConfiguration.clarifaiModelVersionId) { // Use clarifaiModelVersionId
+						setApiConfigurationField("clarifaiModelVersionId", clarifaiDefaultModelId); // Use clarifaiModelVersionId
+					}
+					break;
 			}
 
 			setApiConfigurationField("apiProvider", value)
@@ -277,6 +308,22 @@ const ApiOptions = ({
 			apiConfiguration.requestyModelId,
 		],
 	)
+
+	const handleTestConnectionClarifai = useCallback(async () => {
+		setIsTestingClarifai(true);
+		// TODO: Implement actual test connection logic
+		await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate async operation
+		setClarifaiTestResult(true); // Simulate success
+		setIsTestingClarifai(false);
+	}, []);
+
+	const handleSaveClarifai = useCallback(async () => {
+		setIsSavingClarifai(true);
+		// TODO: Implement actual save logic
+		await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate async operation
+		setClarifaiSaveResult(true); // Simulate success
+		setIsSavingClarifai(false);
+	}, []);
 
 	return (
 		<div className="flex flex-col gap-3">
@@ -545,6 +592,57 @@ const ApiOptions = ({
 							</div>
 						</>
 					)}
+				</>
+			)}
+
+			{selectedProvider === "clarifai" && (
+				<>
+					<VSCodeTextField
+						value={apiConfiguration?.clarifaiPat || ""}
+						type="password"
+						onInput={handleInputChange("clarifaiPat")}
+						placeholder="Enter your Clarifai PAT token"
+						className="w-full">
+						<label className="block font-medium mb-1">PAT Token</label>
+					</VSCodeTextField>
+					<div className="text-sm text-vscode-descriptionForeground -mt-2">
+						{t("settings:providers.apiKeyStorageNotice")}
+					</div>
+					<VSCodeTextField
+						value={apiConfiguration?.clarifaiApiBaseUrl || "https://api.clarifai.com"}
+						type="url"
+						onInput={handleInputChange("clarifaiApiBaseUrl")}
+						placeholder="https://api.clarifai.com"
+						className="w-full">
+						<label className="block font-medium mb-1">API Base URL</label>
+					</VSCodeTextField>
+
+					{clarifaiTestResult !== null && (
+						<VSCodeBadge className={`mt-2 ${clarifaiTestResult ? 'bg-green-500' : 'bg-red-500'}`}>
+							{clarifaiTestResult ? '✓ Connection successful' : '✗ Connection failed'}
+						</VSCodeBadge>
+					)}
+					{clarifaiSaveResult !== null && (
+						<VSCodeBadge className={`mt-2 ${clarifaiSaveResult ? 'bg-green-500' : 'bg-red-500'}`}>
+							{clarifaiSaveResult ? '✓ Settings saved' : '✗ Failed to save settings'}
+						</VSCodeBadge>
+					)}
+
+					<div className="flex space-x-2">
+						<Button
+							onClick={handleTestConnectionClarifai}
+							disabled={!apiConfiguration?.clarifaiPat || isTestingClarifai}
+						>
+							{isTestingClarifai ? 'Testing...' : 'Test Connection'}
+						</Button>
+						<Button
+							onClick={handleSaveClarifai}
+							disabled={!apiConfiguration?.clarifaiPat || isSavingClarifai}
+							variant="default"
+						>
+							{isSavingClarifai ? 'Saving...' : 'Save'}
+						</Button>
+					</div>
 				</>
 			)}
 
@@ -1530,6 +1628,18 @@ const ApiOptions = ({
 						</div>
 					</div>
 				)}
+
+			{selectedProvider === "clarifai" && ( // Added ModelPicker for Clarifai
+				<ModelPicker
+					apiConfiguration={apiConfiguration}
+					setApiConfigurationField={setApiConfigurationField}
+					defaultModelId={clarifaiDefaultModelId}
+					models={clarifaiModels ?? {}}
+					modelIdKey="clarifaiModelVersionId" // Use clarifaiModelVersionId
+					serviceName="Clarifai"
+					serviceUrl="https://www.clarifai.com/models"
+				/>
+			)}
 
 			{selectedProvider === "glama" && (
 				<ModelPicker

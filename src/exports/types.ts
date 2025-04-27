@@ -22,6 +22,7 @@ type ProviderSettings = {
 				| "human-relay"
 				| "fake-ai"
 				| "xai"
+				| "clarifai"
 		  )
 		| undefined
 	apiModelId?: string | undefined
@@ -124,6 +125,10 @@ type ProviderSettings = {
 	modelTemperature?: (number | null) | undefined
 	rateLimitSeconds?: number | undefined
 	fakeAi?: unknown | undefined
+	clarifaiPat?: string | undefined
+	clarifaiApiKey?: string | undefined
+	clarifaiApiBaseUrl?: string | undefined
+	clarifaiModelVersionId?: string | undefined
 }
 
 export type { ProviderSettings }
@@ -154,6 +159,7 @@ type GlobalSettings = {
 							| "human-relay"
 							| "fake-ai"
 							| "xai"
+							| "clarifai"
 					  )
 					| undefined
 		  }[]

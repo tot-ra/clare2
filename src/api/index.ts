@@ -22,6 +22,7 @@ import { RequestyHandler } from "./providers/requesty"
 import { HumanRelayHandler } from "./providers/human-relay"
 import { FakeAIHandler } from "./providers/fake-ai"
 import { XAIHandler } from "./providers/xai"
+import { ClarifaiHandler } from "./providers/clarifai" // Import ClarifaiHandler
 
 export interface SingleCompletionHandler {
 	completePrompt(prompt: string): Promise<string>
@@ -82,6 +83,8 @@ export function buildApiHandler(configuration: ApiConfiguration): ApiHandler {
 			return new FakeAIHandler(options)
 		case "xai":
 			return new XAIHandler(options)
+		case "clarifai": // Add case for Clarifai
+			return new ClarifaiHandler(options)
 		default:
 			return new AnthropicHandler(options)
 	}

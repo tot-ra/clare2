@@ -125,6 +125,10 @@ export interface WebviewMessage {
 		| "searchFiles"
 		| "toggleApiConfigPin"
 		| "setHistoryPreviewCollapsed"
+		| "saveClarifaiSettings" // Add new message type
+		| "getClarifaiSettings" // Add new message type
+		| "testClarifaiConnection" // Add new message type
+		| "requestClarifaiModels" // Added clarifai message type
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse
@@ -152,6 +156,8 @@ export interface WebviewMessage {
 	ids?: string[]
 	hasSystemPromptOverride?: boolean
 	historyPreviewCollapsed?: boolean
+	pat?: string; // Add pat property
+	baseUrl?: string; // Add baseUrl property
 }
 
 export const checkoutDiffPayloadSchema = z.object({
