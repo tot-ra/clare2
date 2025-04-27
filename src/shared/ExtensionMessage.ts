@@ -67,6 +67,9 @@ export interface ExtensionMessage {
 		| "toggleApiConfigPin"
 		| "acceptInput"
 		| "setHistoryPreviewCollapsed"
+		| "clarifaiSettingsSaved"
+		| "requestClarifaiModels" // Added clarifai message type
+		| "clarifaiModels" // Added clarifai message type
 	text?: string
 	action?:
 		| "chatButtonClicked"
@@ -103,6 +106,7 @@ export interface ExtensionMessage {
 	promptText?: string
 	results?: { path: string; type: "file" | "folder"; label?: string }[]
 	error?: string
+	clarifaiModels?: any;
 }
 
 export type ExtensionState = Pick<

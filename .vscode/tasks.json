@@ -16,8 +16,8 @@
 		},
 		{
 			"label": "npm: dev",
-			"type": "npm",
-			"script": "dev",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh && nvm install && nvm use && npm run dev",
 			"group": "build",
 			"problemMatcher": {
 				"owner": "vite",
@@ -38,8 +38,8 @@
 		},
 		{
 			"label": "npm: watch:esbuild",
-			"type": "npm",
-			"script": "watch:esbuild",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh && nvm install && nvm use && npm run watch:esbuild",
 			"group": "build",
 			"problemMatcher": "$esbuild-watch",
 			"isBackground": true,
@@ -50,8 +50,8 @@
 		},
 		{
 			"label": "npm: watch:tsc",
-			"type": "npm",
-			"script": "watch:tsc",
+			"type": "shell",
+			"command": "source ~/.nvm/nvm.sh && nvm install && nvm use && npm run watch:tsc",
 			"group": "build",
 			"problemMatcher": "$tsc-watch",
 			"isBackground": true,

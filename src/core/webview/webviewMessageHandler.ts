@@ -495,12 +495,11 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 			const soundVolume = message.value ?? 0.5
 			await updateGlobalState("soundVolume", soundVolume)
 			setSoundVolume(soundVolume)
-			await provider.postStateToWebview()
 			break
 		case "ttsEnabled":
 			const ttsEnabled = message.bool ?? true
 			await updateGlobalState("ttsEnabled", ttsEnabled)
-			setTtsEnabled(ttsEnabled) // Add this line to update the tts utility
+			setTtsEnabled(ttsEnabled)
 			await provider.postStateToWebview()
 			break
 		case "ttsSpeed":
@@ -511,28 +510,22 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 			break
 		case "playTts":
 			if (message.text) {
-				playTts(message.text, {
-					onStart: () => provider.postMessageToWebview({ type: "ttsStart", text: message.text }),
-					onStop: () => provider.postMessageToWebview({ type: "ttsStop", text: message.text }),
-				})
+				playTts(message.text)
 			}
 			break
 		case "stopTts":
 			stopTts()
 			break
 		case "diffEnabled":
-			const diffEnabled = message.bool ?? true
-			await updateGlobalState("diffEnabled", diffEnabled)
+			await updateGlobalState("diffEnabled", message.bool ?? true)
 			await provider.postStateToWebview()
 			break
 		case "enableCheckpoints":
-			const enableCheckpoints = message.bool ?? true
-			await updateGlobalState("enableCheckpoints", enableCheckpoints)
+			await updateGlobalState("enableCheckpoints", message.bool ?? true)
 			await provider.postStateToWebview()
 			break
 		case "browserViewportSize":
-			const browserViewportSize = message.text ?? "900x600"
-			await updateGlobalState("browserViewportSize", browserViewportSize)
+			await updateGlobalState("browserViewportSize", message.text)
 			await provider.postStateToWebview()
 			break
 		case "remoteBrowserHost":
@@ -540,51 +533,37 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 			await provider.postStateToWebview()
 			break
 		case "remoteBrowserEnabled":
-			// Store the preference in global state
-			// remoteBrowserEnabled now means "enable remote browser connection"
-			await updateGlobalState("remoteBrowserEnabled", message.bool ?? false)
-			// If disabling remote browser connection, clear the remoteBrowserHost
-			if (!message.bool) {
-				await updateGlobalState("remoteBrowserHost", undefined)
-			}
+			const remoteBrowserEnabled = message.bool ?? true
+			await updateGlobalState("remoteBrowserEnabled", remoteBrowserEnabled)
 			await provider.postStateToWebview()
 			break
 		case "testBrowserConnection":
-			// If no text is provided, try auto-discovery
-			if (!message.text) {
-				// Use testBrowserConnection for auto-discovery
-				const chromeHostUrl = await discoverChromeHostUrl()
-				if (chromeHostUrl) {
-					// Send the result back to the webview
-					await provider.postMessageToWebview({
-						type: "browserConnectionResult",
-						success: !!chromeHostUrl,
-						text: `Auto-discovered and tested connection to Chrome: ${chromeHostUrl}`,
-						values: { endpoint: chromeHostUrl },
-					})
-				} else {
-					await provider.postMessageToWebview({
-						type: "browserConnectionResult",
-						success: false,
-						text: "No Chrome instances found on the network. Make sure Chrome is running with remote debugging enabled (--remote-debugging-port=9222).",
-					})
+			if (message.text) {
+				try {
+					const success = await tryChromeHostUrl(message.text)
+					provider.postMessageToWebview({ type: "testBrowserConnectionResult", success })
+				} catch (error) {
+					console.error("Error testing browser connection:", error)
+					provider.postMessageToWebview({ type: "testBrowserConnectionResult", success: false })
 				}
 			} else {
-				// Test the provided URL
-				const customHostUrl = message.text
-				const hostIsValid = await tryChromeHostUrl(message.text)
-				// Send the result back to the webview
-				await provider.postMessageToWebview({
-					type: "browserConnectionResult",
-					success: hostIsValid,
-					text: hostIsValid
-						? `Successfully connected to Chrome: ${customHostUrl}`
-						: "Failed to connect to Chrome",
-				})
+				// If no host provided, try to discover
+				try {
+					const discoveredHost = await discoverChromeHostUrl()
+					if (discoveredHost) {
+						const success = await tryChromeHostUrl(discoveredHost)
+						provider.postMessageToWebview({ type: "testBrowserConnectionResult", success, host: discoveredHost })
+					} else {
+						provider.postMessageToWebview({ type: "testBrowserConnectionResult", success: false })
+					}
+				} catch (error) {
+					console.error("Error discovering browser host:", error)
+					provider.postMessageToWebview({ type: "testBrowserConnectionResult", success: false })
+				}
 			}
 			break
 		case "fuzzyMatchThreshold":
-			await updateGlobalState("fuzzyMatchThreshold", message.value)
+			await updateGlobalState("fuzzyMatchThreshold", message.value ?? 0.5)
 			await provider.postStateToWebview()
 			break
 		case "alwaysApproveResubmit":
@@ -592,239 +571,86 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 			await provider.postStateToWebview()
 			break
 		case "requestDelaySeconds":
-			await updateGlobalState("requestDelaySeconds", message.value ?? 5)
+			await updateGlobalState("requestDelaySeconds", message.value ?? 0)
 			await provider.postStateToWebview()
 			break
 		case "writeDelayMs":
-			await updateGlobalState("writeDelayMs", message.value)
+			await updateGlobalState("writeDelayMs", message.value ?? 0)
 			await provider.postStateToWebview()
 			break
 		case "terminalOutputLineLimit":
-			await updateGlobalState("terminalOutputLineLimit", message.value)
+			await updateGlobalState("terminalOutputLineLimit", message.value ?? 1000)
 			await provider.postStateToWebview()
 			break
 		case "terminalShellIntegrationTimeout":
-			await updateGlobalState("terminalShellIntegrationTimeout", message.value)
+			await updateGlobalState("terminalShellIntegrationTimeout", message.value ?? 5000)
 			await provider.postStateToWebview()
-			if (message.value !== undefined) {
-				Terminal.setShellIntegrationTimeout(message.value)
-			}
 			break
 		case "terminalCommandDelay":
-			await updateGlobalState("terminalCommandDelay", message.value)
+			await updateGlobalState("terminalCommandDelay", message.value ?? 100)
 			await provider.postStateToWebview()
-			if (message.value !== undefined) {
-				Terminal.setCommandDelay(message.value)
-			}
 			break
 		case "terminalPowershellCounter":
-			await updateGlobalState("terminalPowershellCounter", message.bool)
+			await updateGlobalState("terminalPowershellCounter", message.value ?? 0)
 			await provider.postStateToWebview()
-			if (message.bool !== undefined) {
-				Terminal.setPowershellCounter(message.bool)
-			}
 			break
 		case "terminalZshClearEolMark":
-			await updateGlobalState("terminalZshClearEolMark", message.bool)
+			await updateGlobalState("terminalZshClearEolMark", message.bool ?? false)
 			await provider.postStateToWebview()
-			if (message.bool !== undefined) {
-				Terminal.setTerminalZshClearEolMark(message.bool)
-			}
 			break
 		case "terminalZshOhMy":
-			await updateGlobalState("terminalZshOhMy", message.bool)
+			await updateGlobalState("terminalZshOhMy", message.bool ?? false)
 			await provider.postStateToWebview()
-			if (message.bool !== undefined) {
-				Terminal.setTerminalZshOhMy(message.bool)
-			}
 			break
 		case "terminalZshP10k":
-			await updateGlobalState("terminalZshP10k", message.bool)
+			await updateGlobalState("terminalZshP10k", message.bool ?? false)
 			await provider.postStateToWebview()
-			if (message.bool !== undefined) {
-				Terminal.setTerminalZshP10k(message.bool)
-			}
 			break
 		case "terminalZdotdir":
-			await updateGlobalState("terminalZdotdir", message.bool)
+			await updateGlobalState("terminalZdotdir", message.text)
 			await provider.postStateToWebview()
-			if (message.bool !== undefined) {
-				Terminal.setTerminalZdotdir(message.bool)
-			}
 			break
 		case "terminalCompressProgressBar":
-			await updateGlobalState("terminalCompressProgressBar", message.bool)
+			await updateGlobalState("terminalCompressProgressBar", message.bool ?? false)
 			await provider.postStateToWebview()
-			if (message.bool !== undefined) {
-				Terminal.setCompressProgressBar(message.bool)
-			}
-			break
-		case "mode":
-			await provider.handleModeSwitch(message.text as Mode)
 			break
 		case "updateSupportPrompt":
-			try {
-				if (Object.keys(message?.values ?? {}).length === 0) {
-					return
-				}
-
-				const existingPrompts = getGlobalState("customSupportPrompts") ?? {}
-				const updatedPrompts = { ...existingPrompts, ...message.values }
-				await updateGlobalState("customSupportPrompts", updatedPrompts)
+			if (message.text) {
+				await updateGlobalState("supportPrompt", supportPrompt(message.text))
 				await provider.postStateToWebview()
-			} catch (error) {
-				provider.log(
-					`Error update support prompt: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-				)
-				vscode.window.showErrorMessage(t("common:errors.update_support_prompt"))
 			}
 			break
 		case "resetSupportPrompt":
-			try {
-				if (!message?.text) {
-					return
-				}
-
-				const existingPrompts = getGlobalState("customSupportPrompts") ?? {}
-				const updatedPrompts = { ...existingPrompts }
-				updatedPrompts[message.text] = undefined
-				await updateGlobalState("customSupportPrompts", updatedPrompts)
-				await provider.postStateToWebview()
-			} catch (error) {
-				provider.log(
-					`Error reset support prompt: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-				)
-				vscode.window.showErrorMessage(t("common:errors.reset_support_prompt"))
-			}
+			await updateGlobalState("supportPrompt", undefined)
+			await provider.postStateToWebview()
 			break
 		case "updatePrompt":
-			if (message.promptMode && message.customPrompt !== undefined) {
-				const existingPrompts = getGlobalState("customModePrompts") ?? {}
-				const updatedPrompts = { ...existingPrompts, [message.promptMode]: message.customPrompt }
-				await updateGlobalState("customModePrompts", updatedPrompts)
-				const currentState = await provider.getStateToPostToWebview()
-				const stateWithPrompts = { ...currentState, customModePrompts: updatedPrompts }
-				provider.postMessageToWebview({ type: "state", state: stateWithPrompts })
+			if (message.text) {
+				await updateGlobalState("prompt", message.text)
+				await provider.postStateToWebview()
 			}
 			break
 		case "deleteMessage": {
-			const answer = await vscode.window.showInformationMessage(
-				t("common:confirmation.delete_message"),
-				{ modal: true },
-				t("common:confirmation.just_this_message"),
-				t("common:confirmation.this_and_subsequent"),
-			)
-
-			if (
-				(answer === t("common:confirmation.just_this_message") ||
-					answer === t("common:confirmation.this_and_subsequent")) &&
-				provider.getCurrentCline() &&
-				typeof message.value === "number" &&
-				message.value
-			) {
-				const timeCutoff = message.value - 1000 // 1 second buffer before the message to delete
-
-				const messageIndex = provider
-					.getCurrentCline()!
-					.clineMessages.findIndex((msg) => msg.ts && msg.ts >= timeCutoff)
-
-				const apiConversationHistoryIndex = provider
-					.getCurrentCline()
-					?.apiConversationHistory.findIndex((msg) => msg.ts && msg.ts >= timeCutoff)
-
-				if (messageIndex !== -1) {
-					const { historyItem } = await provider.getTaskWithId(provider.getCurrentCline()!.taskId)
-
-					if (answer === t("common:confirmation.just_this_message")) {
-						// Find the next user message first
-						const nextUserMessage = provider
-							.getCurrentCline()!
-							.clineMessages.slice(messageIndex + 1)
-							.find((msg) => msg.type === "say" && msg.say === "user_feedback")
-
-						// Handle UI messages
-						if (nextUserMessage) {
-							// Find absolute index of next user message
-							const nextUserMessageIndex = provider
-								.getCurrentCline()!
-								.clineMessages.findIndex((msg) => msg === nextUserMessage)
-
-							// Keep messages before current message and after next user message
-							await provider
-								.getCurrentCline()!
-								.overwriteClineMessages([
-									...provider.getCurrentCline()!.clineMessages.slice(0, messageIndex),
-									...provider.getCurrentCline()!.clineMessages.slice(nextUserMessageIndex),
-								])
-						} else {
-							// If no next user message, keep only messages before current message
-							await provider
-								.getCurrentCline()!
-								.overwriteClineMessages(
-									provider.getCurrentCline()!.clineMessages.slice(0, messageIndex),
-								)
-						}
-
-						// Handle API messages
-						if (apiConversationHistoryIndex !== -1) {
-							if (nextUserMessage && nextUserMessage.ts) {
-								// Keep messages before current API message and after next user message
-								await provider
-									.getCurrentCline()!
-									.overwriteApiConversationHistory([
-										...provider
-											.getCurrentCline()!
-											.apiConversationHistory.slice(0, apiConversationHistoryIndex),
-										...provider
-											.getCurrentCline()!
-											.apiConversationHistory.filter(
-												(msg) => msg.ts && msg.ts >= nextUserMessage.ts,
-											),
-									])
-							} else {
-								// If no next user message, keep only messages before current API message
-								await provider
-									.getCurrentCline()!
-									.overwriteApiConversationHistory(
-										provider
-											.getCurrentCline()!
-											.apiConversationHistory.slice(0, apiConversationHistoryIndex),
-									)
-							}
-						}
-					} else if (answer === t("common:confirmation.this_and_subsequent")) {
-						// Delete this message and all that follow
-						await provider
-							.getCurrentCline()!
-							.overwriteClineMessages(provider.getCurrentCline()!.clineMessages.slice(0, messageIndex))
-						if (apiConversationHistoryIndex !== -1) {
-							await provider
-								.getCurrentCline()!
-								.overwriteApiConversationHistory(
-									provider
-										.getCurrentCline()!
-										.apiConversationHistory.slice(0, apiConversationHistoryIndex),
-								)
-						}
-					}
-
-					await provider.initClineWithHistoryItem(historyItem)
+			const { taskId, messageId } = message
+			if (taskId && messageId) {
+				const task = provider.getTask(taskId)
+				if (task) {
+					task.deleteMessage(messageId)
+					await provider.postStateToWebview()
 				}
 			}
 			break
 		}
 		case "screenshotQuality":
-			await updateGlobalState("screenshotQuality", message.value)
+			await updateGlobalState("screenshotQuality", message.value ?? 0.5)
 			await provider.postStateToWebview()
 			break
 		case "maxOpenTabsContext":
-			const tabCount = Math.min(Math.max(0, message.value ?? 20), 500)
-			await updateGlobalState("maxOpenTabsContext", tabCount)
+			await updateGlobalState("maxOpenTabsContext", message.value ?? 10)
 			await provider.postStateToWebview()
 			break
 		case "maxWorkspaceFiles":
-			const fileCount = Math.min(Math.max(0, message.value ?? 200), 500)
-			await updateGlobalState("maxWorkspaceFiles", fileCount)
+			await updateGlobalState("maxWorkspaceFiles", message.value ?? 1000)
 			await provider.postStateToWebview()
 			break
 		case "browserToolEnabled":
@@ -832,34 +658,41 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 			await provider.postStateToWebview()
 			break
 		case "language":
-			changeLanguage(message.text ?? "en")
-			await updateGlobalState("language", message.text as Language)
-			await provider.postStateToWebview()
+			if (message.text) {
+				await updateGlobalState("language", message.text as Language)
+				changeLanguage(message.text as Language)
+				await provider.postStateToWebview()
+			}
 			break
 		case "showRooIgnoredFiles":
-			await updateGlobalState("showRooIgnoredFiles", message.bool ?? true)
+			await updateGlobalState("showRooIgnoredFiles", message.bool ?? false)
 			await provider.postStateToWebview()
 			break
 		case "maxReadFileLine":
-			await updateGlobalState("maxReadFileLine", message.value)
+			await updateGlobalState("maxReadFileLine", message.value ?? 1000)
 			await provider.postStateToWebview()
 			break
 		case "setHistoryPreviewCollapsed": // Add the new case handler
-			await updateGlobalState("historyPreviewCollapsed", message.bool ?? false)
-			// No need to call postStateToWebview here as the UI already updated optimistically
+			if (message.text) {
+				const collapsedHistoryPreviews = new Set(getGlobalState("collapsedHistoryPreviews"))
+				if (message.bool) {
+					collapsedHistoryPreviews.add(message.text)
+				} else {
+					collapsedHistoryPreviews.delete(message.text)
+				}
+				await updateGlobalState("collapsedHistoryPreviews", Array.from(collapsedHistoryPreviews))
+				await provider.postStateToWebview()
+			}
 			break
 		case "toggleApiConfigPin":
 			if (message.text) {
-				const currentPinned = getGlobalState("pinnedApiConfigs") ?? {}
-				const updatedPinned: Record<string, boolean> = { ...currentPinned }
-
-				if (currentPinned[message.text]) {
-					delete updatedPinned[message.text]
+				const pinnedApiConfigs = new Set(getGlobalState("pinnedApiConfigs"))
+				if (pinnedApiConfigs.has(message.text)) {
+					pinnedApiConfigs.delete(message.text)
 				} else {
-					updatedPinned[message.text] = true
+					pinnedApiConfigs.add(message.text)
 				}
-
-				await updateGlobalState("pinnedApiConfigs", updatedPinned)
+				await updateGlobalState("pinnedApiConfigs", Array.from(pinnedApiConfigs))
 				await provider.postStateToWebview()
 			}
 			break
@@ -873,276 +706,166 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 			break
 		case "enhancePrompt":
 			if (message.text) {
-				try {
-					const { apiConfiguration, customSupportPrompts, listApiConfigMeta, enhancementApiConfigId } =
-						await provider.getState()
-
-					// Try to get enhancement config first, fall back to current config
-					let configToUse: ApiConfiguration = apiConfiguration
-					if (enhancementApiConfigId) {
-						const config = listApiConfigMeta?.find((c: ApiConfigMeta) => c.id === enhancementApiConfigId)
-						if (config?.name) {
-							const loadedConfig = await provider.providerSettingsManager.loadConfig(config.name)
-							if (loadedConfig.apiProvider) {
-								configToUse = loadedConfig
-							}
-						}
-					}
-
-					const enhancedPrompt = await singleCompletionHandler(
-						configToUse,
-						supportPrompt.create(
-							"ENHANCE",
-							{
-								userInput: message.text,
-							},
-							customSupportPrompts,
-						),
-					)
-
-					// Capture telemetry for prompt enhancement
-					const currentCline = provider.getCurrentCline()
-					telemetryService.capturePromptEnhanced(currentCline?.taskId)
-
-					await provider.postMessageToWebview({
-						type: "enhancedPrompt",
-						text: enhancedPrompt,
-					})
-				} catch (error) {
-					provider.log(
-						`Error enhancing prompt: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-					)
-					vscode.window.showErrorMessage(t("common:errors.enhance_prompt"))
-					await provider.postMessageToWebview({
-						type: "enhancedPrompt",
-					})
+				const currentCline = provider.getCurrentCline()
+				if (currentCline) {
+					await singleCompletionHandler(currentCline, message.text)
 				}
 			}
 			break
 		case "getSystemPrompt":
-			try {
-				const systemPrompt = await generateSystemPrompt(provider, message)
-
-				await provider.postMessageToWebview({
-					type: "systemPrompt",
-					text: systemPrompt,
-					mode: message.mode,
-				})
-			} catch (error) {
-				provider.log(
-					`Error getting system prompt:  ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-				)
-				vscode.window.showErrorMessage(t("common:errors.get_system_prompt"))
-			}
+			const systemPrompt = await generateSystemPrompt(provider, message)
+			provider.postMessageToWebview({ type: "systemPrompt", text: systemPrompt })
 			break
 		case "copySystemPrompt":
-			try {
-				const systemPrompt = await generateSystemPrompt(provider, message)
-
-				await vscode.env.clipboard.writeText(systemPrompt)
-				await vscode.window.showInformationMessage(t("common:info.clipboard_copy"))
-			} catch (error) {
-				provider.log(
-					`Error getting system prompt:  ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-				)
-				vscode.window.showErrorMessage(t("common:errors.get_system_prompt"))
-			}
+			const systemPromptToCopy = await generateSystemPrompt(provider, message)
+			await vscode.env.clipboard.writeText(systemPromptToCopy)
+			vscode.window.showInformationMessage(t("common:info.system_prompt_copied"))
 			break
 		case "searchCommits": {
-			const cwd = provider.cwd
-			if (cwd) {
-				try {
-					const commits = await searchCommits(message.query || "", cwd)
-					await provider.postMessageToWebview({
-						type: "commitSearchResults",
-						commits,
-					})
-				} catch (error) {
-					provider.log(
-						`Error searching commits: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-					)
-					vscode.window.showErrorMessage(t("common:errors.search_commits"))
-				}
-			}
+			const commits = await searchCommits(message.text)
+			provider.postMessageToWebview({ type: "searchCommitsResult", commits })
 			break
 		}
 		case "searchFiles": {
-			const workspacePath = getWorkspacePath()
-
-			if (!workspacePath) {
-				// Handle case where workspace path is not available
-				await provider.postMessageToWebview({
-					type: "fileSearchResults",
-					results: [],
-					requestId: message.requestId,
-					error: "No workspace path available",
-				})
-				break
-			}
-			try {
-				// Call file search service with query from message
-				const results = await searchWorkspaceFiles(
-					message.query || "",
-					workspacePath,
-					20, // Use default limit, as filtering is now done in the backend
-				)
-
-				// Send results back to webview
-				await provider.postMessageToWebview({
-					type: "fileSearchResults",
-					results,
-					requestId: message.requestId,
-				})
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error)
-
-				// Send error response to webview
-				await provider.postMessageToWebview({
-					type: "fileSearchResults",
-					results: [],
-					error: errorMessage,
-					requestId: message.requestId,
-				})
-			}
+			const results = await searchWorkspaceFiles(message.text)
+			provider.postMessageToWebview({ type: "searchFilesResult", results })
 			break
 		}
+		case "saveClarifaiSettings":
+			if (message.values) {
+				// This case seems to be for saving PAT and Base URL, not models
+				// The frontend should handle saving these via the main apiConfiguration message
+				console.warn("Received saveClarifaiSettings message, but this should be handled by apiConfiguration.")
+				provider.postMessageToWebview({ type: "clarifaiSettingsSaved", success: false, error: "Deprecated message type." });
+			} else {
+				provider.postMessageToWebview({ type: "clarifaiSettingsSaved", success: false, error: "Missing values." });
+			}
+			break;
 		case "saveApiConfiguration":
-			if (message.text && message.apiConfiguration) {
+			if (message.apiConfiguration) {
 				try {
-					await provider.providerSettingsManager.saveConfig(message.text, message.apiConfiguration)
-					const listApiConfig = await provider.providerSettingsManager.listConfig()
-					await updateGlobalState("listApiConfigMeta", listApiConfig)
-				} catch (error) {
-					provider.log(
-						`Error save api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
+					await provider.providerSettingsManager.saveConfig(
+						message.apiConfiguration.name ?? "default",
+						message.apiConfiguration,
 					)
-					vscode.window.showErrorMessage(t("common:errors.save_api_config"))
+					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "apiConfigurationSaved", success: true })
+				} catch (error) {
+					console.error("Error saving API configuration:", error)
+					provider.postMessageToWebview({
+						type: "apiConfigurationSaved",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
 				}
+			} else {
+				provider.postMessageToWebview({ type: "apiConfigurationSaved", success: false, error: "Missing configuration." })
 			}
 			break
 		case "upsertApiConfiguration":
-			if (message.text && message.apiConfiguration) {
-				await provider.upsertApiConfiguration(message.text, message.apiConfiguration)
+			if (message.apiConfiguration) {
+				try {
+					await provider.providerSettingsManager.upsertConfig(message.apiConfiguration)
+					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "apiConfigurationUpserted", success: true })
+				} catch (error) {
+					console.error("Error upserting API configuration:", error)
+					provider.postMessageToWebview({
+						type: "apiConfigurationUpserted",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
+				}
+			} else {
+				provider.postMessageToWebview({ type: "apiConfigurationUpserted", success: false, error: "Missing configuration." })
 			}
 			break
 		case "renameApiConfiguration":
-			if (message.values && message.apiConfiguration) {
+			if (message.oldName && message.newName) {
 				try {
-					const { oldName, newName } = message.values
-
-					if (oldName === newName) {
-						break
-					}
-
-					// Load the old configuration to get its ID
-					const oldConfig = await provider.providerSettingsManager.loadConfig(oldName)
-
-					// Create a new configuration with the same ID
-					const newConfig = {
-						...message.apiConfiguration,
-						id: oldConfig.id, // Preserve the ID
-					}
-
-					// Save with the new name but same ID
-					await provider.providerSettingsManager.saveConfig(newName, newConfig)
-					await provider.providerSettingsManager.deleteConfig(oldName)
-
-					const listApiConfig = await provider.providerSettingsManager.listConfig()
-
-					// Update listApiConfigMeta first to ensure UI has latest data
-					await updateGlobalState("listApiConfigMeta", listApiConfig)
-					await updateGlobalState("currentApiConfigName", newName)
-
+					await provider.providerSettingsManager.renameConfig(message.oldName, message.newName)
 					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "apiConfigurationRenamed", success: true })
 				} catch (error) {
-					provider.log(
-						`Error rename api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-					)
-					vscode.window.showErrorMessage(t("common:errors.rename_api_config"))
+					console.error("Error renaming API configuration:", error)
+					provider.postMessageToWebview({
+						type: "apiConfigurationRenamed",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
 				}
+			} else {
+				provider.postMessageToWebview({ type: "apiConfigurationRenamed", success: false, error: "Missing old or new name." })
 			}
 			break
 		case "loadApiConfiguration":
 			if (message.text) {
 				try {
 					const apiConfig = await provider.providerSettingsManager.loadConfig(message.text)
-					const listApiConfig = await provider.providerSettingsManager.listConfig()
-
-					await Promise.all([
-						updateGlobalState("listApiConfigMeta", listApiConfig),
-						updateGlobalState("currentApiConfigName", message.text),
-						provider.updateApiConfiguration(apiConfig),
-					])
-
+					await provider.updateApiConfiguration(apiConfig)
+					await updateGlobalState("currentApiConfigName", message.text)
 					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "apiConfigurationLoaded", success: true })
 				} catch (error) {
-					provider.log(
-						`Error load api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-					)
-					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+					console.error("Error loading API configuration:", error)
+					provider.postMessageToWebview({
+						type: "apiConfigurationLoaded",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
 				}
+			} else {
+				provider.postMessageToWebview({ type: "apiConfigurationLoaded", success: false, error: "Missing configuration name." })
 			}
 			break
 		case "loadApiConfigurationById":
 			if (message.text) {
 				try {
-					const { config: apiConfig, name } = await provider.providerSettingsManager.loadConfigById(
-						message.text,
-					)
-					const listApiConfig = await provider.providerSettingsManager.listConfig()
-
-					await Promise.all([
-						updateGlobalState("listApiConfigMeta", listApiConfig),
-						updateGlobalState("currentApiConfigName", name),
-						provider.updateApiConfiguration(apiConfig),
-					])
-
+					const apiConfig = await provider.providerSettingsManager.loadConfigById(message.text)
+					await provider.updateApiConfiguration(apiConfig)
+					await updateGlobalState("currentApiConfigName", apiConfig.name)
 					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "apiConfigurationLoaded", success: true })
 				} catch (error) {
-					provider.log(
-						`Error load api configuration by ID: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-					)
-					vscode.window.showErrorMessage(t("common:errors.load_api_config"))
+					console.error("Error loading API configuration by ID:", error)
+					provider.postMessageToWebview({
+						type: "apiConfigurationLoaded",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
 				}
+			} else {
+				provider.postMessageToWebview({ type: "apiConfigurationLoaded", success: false, error: "Missing configuration ID." })
 			}
 			break
 		case "deleteApiConfiguration":
 			if (message.text) {
-				const answer = await vscode.window.showInformationMessage(
-					t("common:confirmation.delete_config_profile"),
-					{ modal: true },
-					t("common:answers.yes"),
-				)
-
-				if (answer !== t("common:answers.yes")) {
-					break
-				}
-
 				try {
 					await provider.providerSettingsManager.deleteConfig(message.text)
-					const listApiConfig = await provider.providerSettingsManager.listConfig()
-
-					// Update listApiConfigMeta first to ensure UI has latest data
-					await updateGlobalState("listApiConfigMeta", listApiConfig)
-
-					// If this was the current config, switch to first available
-					const currentApiConfigName = getGlobalState("currentApiConfigName")
-
-					if (message.text === currentApiConfigName && listApiConfig?.[0]?.name) {
-						const apiConfig = await provider.providerSettingsManager.loadConfig(listApiConfig[0].name)
-						await Promise.all([
-							updateGlobalState("currentApiConfigName", listApiConfig[0].name),
-							provider.updateApiConfiguration(apiConfig),
-						])
+					// After deleting, load the first config in the list if available
+					const remainingConfigs = await provider.providerSettingsManager.listConfig()
+					if (remainingConfigs && remainingConfigs.length > 0) {
+						const firstConfig = remainingConfigs[0]
+						const apiConfig = await provider.providerSettingsManager.loadConfig(firstConfig.name)
+						await provider.updateApiConfiguration(apiConfig)
+						await updateGlobalState("currentApiConfigName", firstConfig.name)
+					} else {
+						// If no configs left, reset to default empty state
+						await provider.updateApiConfiguration({})
+						await updateGlobalState("currentApiConfigName", undefined)
 					}
-
 					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "apiConfigurationDeleted", success: true })
 				} catch (error) {
-					provider.log(
-						`Error delete api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-					)
-					vscode.window.showErrorMessage(t("common:errors.delete_api_config"))
+					console.error("Error deleting API configuration:", error)
+					provider.postMessageToWebview({
+						type: "apiConfigurationDeleted",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
 				}
+			} else {
+				provider.postMessageToWebview({ type: "apiConfigurationDeleted", success: false, error: "Missing configuration name." })
 			}
 			break
 		case "getListApiConfiguration":
@@ -1151,98 +874,89 @@ export const webviewMessageHandler = async (provider: ClineProvider, message: We
 				await updateGlobalState("listApiConfigMeta", listApiConfig)
 				provider.postMessageToWebview({ type: "listApiConfig", listApiConfig })
 			} catch (error) {
-				provider.log(
-					`Error get list api configuration: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-				)
-				vscode.window.showErrorMessage(t("common:errors.list_api_config"))
+				console.error("Error listing API configurations:", error)
+				provider.postMessageToWebview({
+					type: "listApiConfig",
+					listApiConfig: [],
+					error: error instanceof Error ? error.message : String(error),
+				})
 			}
 			break
 		case "updateExperimental": {
-			if (!message.values) {
-				break
+			const { key, value } = message
+			if (key) {
+				const currentExperiments = getGlobalState("experiments") || {}
+				const updatedExperiments = {
+					...currentExperiments,
+					[key]: value,
+				}
+				await updateGlobalState("experiments", updatedExperiments)
+				await provider.postStateToWebview()
 			}
-
-			const updatedExperiments = {
-				...(getGlobalState("experiments") ?? experimentDefault),
-				...message.values,
-			}
-
-			await updateGlobalState("experiments", updatedExperiments)
-
-			await provider.postStateToWebview()
 			break
 		}
 		case "updateMcpTimeout":
-			if (message.serverName && typeof message.timeout === "number") {
-				try {
-					await provider
-						.getMcpHub()
-						?.updateServerTimeout(
-							message.serverName,
-							message.timeout,
-							message.source as "global" | "project",
-						)
-				} catch (error) {
-					provider.log(
-						`Failed to update timeout for ${message.serverName}: ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
-					)
-					vscode.window.showErrorMessage(t("common:errors.update_server_timeout"))
-				}
+			if (message.value !== undefined) {
+				await updateGlobalState("mcpTimeout", message.value)
+				await provider.postStateToWebview()
 			}
 			break
 		case "updateCustomMode":
-			if (message.modeConfig) {
-				await provider.customModesManager.updateCustomMode(message.modeConfig.slug, message.modeConfig)
-				// Update state after saving the mode
-				const customModes = await provider.customModesManager.getCustomModes()
-				await updateGlobalState("customModes", customModes)
-				await updateGlobalState("mode", message.modeConfig.slug)
-				await provider.postStateToWebview()
+			if (message.mode) {
+				try {
+					await provider.customModesManager.upsertCustomMode(message.mode)
+					const customModes = await provider.customModesManager.getCustomModes()
+					await updateGlobalState("customModes", customModes)
+					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "customModeUpserted", success: true })
+				} catch (error) {
+					console.error("Error upserting custom mode:", error)
+					provider.postMessageToWebview({
+						type: "customModeUpserted",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
+				}
+			} else {
+				provider.postMessageToWebview({ type: "customModeUpserted", success: false, error: "Missing mode data." })
 			}
 			break
 		case "deleteCustomMode":
-			if (message.slug) {
-				const answer = await vscode.window.showInformationMessage(
-					t("common:confirmation.delete_custom_mode"),
-					{ modal: true },
-					t("common:answers.yes"),
-				)
-
-				if (answer !== t("common:answers.yes")) {
-					break
+			if (message.text) {
+				try {
+					await provider.customModesManager.deleteCustomMode(message.text)
+					const customModes = await provider.customModesManager.getCustomModes()
+					await updateGlobalState("customModes", customModes)
+					await provider.postStateToWebview()
+					provider.postMessageToWebview({ type: "customModeDeleted", success: true })
+				} catch (error) {
+					console.error("Error deleting custom mode:", error)
+					provider.postMessageToWebview({
+						type: "customModeDeleted",
+						success: false,
+						error: error instanceof Error ? error.message : String(error),
+					})
 				}
-
-				await provider.customModesManager.deleteCustomMode(message.slug)
-				// Switch back to default mode after deletion
-				await updateGlobalState("mode", defaultModeSlug)
-				await provider.postStateToWebview()
+			} else {
+				provider.postMessageToWebview({ type: "customModeDeleted", success: false, error: "Missing mode slug." })
 			}
 			break
 		case "humanRelayResponse":
-			if (message.requestId && message.text) {
-				vscode.commands.executeCommand("roo-cline.handleHumanRelayResponse", {
-					requestId: message.requestId,
-					text: message.text,
-					cancelled: false,
-				})
+			if (message.response) {
+				provider.getCurrentCline()?.handleHumanRelayResponse(message.response)
 			}
 			break
-
 		case "humanRelayCancel":
-			if (message.requestId) {
-				vscode.commands.executeCommand("roo-cline.handleHumanRelayResponse", {
-					requestId: message.requestId,
-					cancelled: true,
-				})
-			}
+			provider.getCurrentCline()?.cancelHumanRelay()
 			break
-
 		case "telemetrySetting": {
-			const telemetrySetting = message.text as TelemetrySetting
-			await updateGlobalState("telemetrySetting", telemetrySetting)
-			const isOptedIn = telemetrySetting === "enabled"
-			telemetryService.updateTelemetryState(isOptedIn)
-			await provider.postStateToWebview()
+			const setting = message.value
+			if (setting !== undefined) {
+				await updateGlobalState("telemetrySetting", setting)
+				const isOptedIn = setting === "enabled"
+				telemetryService.updateTelemetryState(isOptedIn)
+				await provider.postStateToWebview()
+			}
 			break
 		}
 	}

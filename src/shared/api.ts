@@ -1397,6 +1397,42 @@ export const vscodeLlmModels = {
 	}
 >
 
+// Clarifai
+// Note: Pricing below is based on placeholders found in the original clarifai.ts.
+// Actual Clarifai pricing needs verification and update.
+export type ClarifaiModelId = keyof typeof clarifaiModels
+// Using Llama 3 70B as default, adjust if needed
+export const clarifaiDefaultModelId: ClarifaiModelId = "qwen/qwenLM/models/QwQ-32B-AWQ"
+export const clarifaiModels = {
+	"qwen/qwenLM/models/QwQ-32B-AWQ": {
+		inputPrice: 0.00117 * 1_000_000, // Placeholder price
+		outputPrice: 0.00117 * 1_000_000, // Placeholder price
+		contextWindow: 128000,
+		supportsPromptCache: false, // Assuming false
+		supportsImages: false, // Assuming false
+	},
+	"deepseek-ai/deepseek-chat/models/deepseek-V2-Chat": {
+		inputPrice: 0.004 * 1_000_000, // Placeholder price
+		outputPrice: 0.004 * 1_000_000, // Placeholder price
+		contextWindow: 128000,
+		supportsPromptCache: false, // Assuming false
+		supportsImages: false, // Assuming false
+	},
+} as const satisfies Record<string, ModelInfo>;
+	// 	inputPrice: 0.005 * 1_000_000, // Placeholder price
+	// 	outputPrice: 0.005 * 1_000_000, // Placeholder price
+	// 	contextWindow: 32000,
+	// 	supportsPromptCache: false, // Assuming false
+	// 	supportsImages: false, // Assuming false
+	// },
+
+	// "qwen/qwenCoder/models/Qwen2_5-Coder-7B-Instruct-vllm":{
+	// 	inputPrice: 0.00046 * 1_000_000, // Placeholder price
+	// 	outputPrice: 0.00046 * 1_000_000, // Placeholder price
+	// 	contextWindow: 32000,
+	// 	supportsPromptCache: false, // Assuming false
+	// 	supportsImages: false, // Assuming false
+	// },
 /**
  * Constants
  */
